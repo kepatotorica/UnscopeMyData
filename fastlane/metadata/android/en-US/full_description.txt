@@ -1,0 +1,2 @@
+UnscopeMyData is a utility to bypass Scoped Storage limitations. 
+It allows you to sync folders from protected /Android/data/ directories to a public unscoped directory on your internal storage using Shizuku for elevated permissions.
