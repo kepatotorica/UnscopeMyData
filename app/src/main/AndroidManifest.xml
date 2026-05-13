@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.kepat.unscopemydata">
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Permissions for accessing external storage (for the public sync folder) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
@@ -24,7 +24,8 @@
 
         <service
             android:name=".MyUserService"
-            android:exported="false" />
+            android:exported="false"
+            tools:ignore="Instantiatable" />
         
         <activity
             android:name=".MainActivity"
