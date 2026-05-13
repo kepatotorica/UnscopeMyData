@@ -2,13 +2,17 @@
 
 UnscopeMyData is an Android utility designed to help users bypass "Scoped Storage" limitations for specific app data folders. It uses **Shizuku** to perform elevated filesystem operations, allowing you to sync data between protected `/Android/data/` directories and a public "Unscoped" directory on your internal storage.
 
+## Why?
+
+I use emulators on my devices and it is a pain to sync the data between all of them. I use syncthing fork, which allows me to sync data across devices, but not in any data folder. This app allows me to quickly move all data that I care about into a folder that syncthing can access, then on my other device allows me to write that same data where it belongs.
+
 ## Features
 
 - **Scoped Storage Bypass:** Access and sync folders usually restricted by Android.
 - **Shizuku Integration:** Uses a system-level privileged process for file operations.
-- **Automatic Sync:** Sync data from protected app folders to public storage and vice versa.
 - **Visual Status:** Real-time Shizuku connectivity status in Settings.
-- **Clean UI:** Modern Material 3 interface with intuitive folder management.
+- **Bare Bones UI:** Very simple UI with little customization.
+- **Portable Folder:** Allowing for syncthing, manual copy and paste, or other syncing services to quickly transfer many different folders at once without having to navigate individual apps menus.
 
 ## Prerequisites
 
@@ -17,7 +21,7 @@ UnscopeMyData is an Android utility designed to help users bypass "Scoped Storag
 
 ## How it Works
 
-1. **Add a Folder:** Pick a folder on your device (usually in `/Android/data/`).
+1. **Add a Folder:** Pick a folder on your device (defaults to `storage/emulated/0/android/data/` but it can be any folder).
 2. **Assign a Name:** Give it a unique identifier for the unscoped directory.
 3. **Sync:**
    - `data -> unscoped`: Copies the protected app data to your public unscoped folder.
