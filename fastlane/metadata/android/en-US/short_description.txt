@@ -1,0 +1,1 @@
+Sync protected Android folders to public storage using Shizuku.

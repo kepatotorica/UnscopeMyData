@@ -32,3 +32,8 @@ I use emulators on my devices and it is a pain to sync the data between all of t
 - Built with **Jetpack Compose**.
 - Uses **AIDL** for IPC with the privileged Shizuku process.
 - Implements a local fallback for public storage operations to ensure reliability.
+
+## Releases & F-Droid
+
+- **GitHub Releases:** Automated builds are available on the [Releases](https://github.com/your-username/UnscopeMyData/releases) page.
+- **F-Droid:** This project includes **Fastlane metadata** (located in `fastlane/metadata`) to be compatible with F-Droid's build system.

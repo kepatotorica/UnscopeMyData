@@ -1,0 +1,84 @@
+name: Android CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Auto Increment Version
+      id: increment_version
+      run: |
+        # Read current version from gradle file
+        CURRENT_VERSION=$(grep "versionName =" app/build.gradle.kts | awk -F'"' '{print $2}')
+        CURRENT_CODE=$(grep "versionCode =" app/build.gradle.kts | awk '{print $3}')
+        
+        echo "Current Version: $CURRENT_VERSION"
+        echo "Current Code: $CURRENT_CODE"
+
+        # Split version into parts
+        IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+        
+        # Increment minor version
+        NEW_MINOR=$((minor + 1))
+        NEW_VERSION="$major.$NEW_MINOR.0"
+        NEW_CODE=$((CURRENT_CODE + 1))
+        
+        echo "New Version: $NEW_VERSION"
+        echo "New Code: $NEW_CODE"
+
+        # Update build.gradle.kts
+        sed -i "s/versionCode = $CURRENT_CODE/versionCode = $NEW_CODE/" app/build.gradle.kts
+        sed -i "s/versionName = \"$CURRENT_VERSION\"/versionName = \"$NEW_VERSION\"/" app/build.gradle.kts
+        
+        # Configure Git
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Commit and push the version bump back to main
+        git add app/build.gradle.kts
+        git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+        git push origin main
+        
+        # Set outputs for next steps
+        echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Build with Gradle
+      run: ./gradlew assembleRelease
+
+    - name: Prepare APK for Release
+      run: |
+        cp app/build/outputs/apk/release/app-release.apk UnscopeMyData-v${{ steps.increment_version.outputs.NEW_VERSION }}.apk
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ steps.increment_version.outputs.NEW_VERSION }}
+        name: Release v${{ steps.increment_version.outputs.NEW_VERSION }}
+        files: UnscopeMyData-v${{ steps.increment_version.outputs.NEW_VERSION }}.apk
+        generate_release_notes: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
