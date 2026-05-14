@@ -19,10 +19,20 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            val storeFilePath = providers.gradleProperty("RELEASE_STORE_FILE").orNull
+            storeFile = storeFilePath?.let(::file)
+            storePassword = providers.gradleProperty("RELEASE_STORE_PASSWORD").orNull
+            keyAlias = providers.gradleProperty("RELEASE_KEY_ALIAS").orNull
+            keyPassword = providers.gradleProperty("RELEASE_KEY_PASSWORD").orNull
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
