@@ -72,11 +72,14 @@ jobs:
         echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > app/release.keystore
         chmod 600 app/release.keystore
         ./gradlew assembleRelease \
-          -PRELEASE_STORE_FILE=app/release.keystore \
+          -PRELEASE_STORE_FILE=release.keystore \
           -PRELEASE_STORE_PASSWORD="$RELEASE_STORE_PASSWORD" \
           -PRELEASE_KEY_ALIAS="$RELEASE_KEY_ALIAS" \
           -PRELEASE_KEY_PASSWORD="$RELEASE_KEY_PASSWORD"
-        rm -f app/release.keystore
+
+    - name: Cleanup Keystore
+      if: always()
+      run: rm -f app/release.keystore
 
     - name: Prepare APK for Release
       run: |
