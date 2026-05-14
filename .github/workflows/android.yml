@@ -59,6 +59,7 @@ jobs:
         # Commit and push the version bump back to main
         git add app/build.gradle.kts
         git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+        git pull origin main --rebase
         git push origin main
         
         # Set outputs for next steps
