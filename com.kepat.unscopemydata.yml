@@ -1,34 +1,30 @@
 Categories:
   - System
-  - Utility
 License: GPL-3.0-only
-SourceCode: https://github.com/kepatotorica/UnscopeMyData # UPDATE THIS URL
-IssueTracker: https://github.com/kepatotorica/UnscopeMyData/issues # UPDATE THIS URL
+SourceCode: https://github.com/kepatotorica/UnscopeMyData
+IssueTracker: https://github.com/kepatotorica/UnscopeMyData/issues
 
-Summary: Sync protected Android folders to public storage using Shizuku.
-Description: |-
-  UnscopeMyData is an Android utility designed to help users bypass "Scoped Storage" 
-  limitations for specific app data folders. It uses Shizuku to perform elevated 
-  filesystem operations, allowing you to sync data between protected /Android/data/ 
-  directories and a public "Unscoped" directory on your internal storage.
-
-  Features:
-  - Scoped Storage Bypass: Access and sync folders usually restricted by Android.
-  - Shizuku Integration: Uses a system-level privileged process for file operations.
-  - Portable Folder: Easily transfer data via Syncthing, manual copy, or other services.
+AutoName: UnscopeMyData
 
 RepoType: git
-Repo: https://github.com/kepatotorica/UnscopeMyData # UPDATE THIS URL
+Repo: https://github.com/kepatotorica/UnscopeMyData
 
 Builds:
-  - versionName: 0.3.0
-    versionCode: 3
-    commit: v0.3.0
+  - versionName: 0.4.0
+    versionCode: 4
+    commit: v0.4.0
     subdir: app
     gradle:
       - yes
 
-AutoUpdateMode: Version v%v
+  - versionName: 0.5.0
+    versionCode: 5
+    commit: v0.5.0
+    subdir: app
+    gradle:
+      - yes
+
+AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 0.3.0
-CurrentVersionCode: 3
+CurrentVersion: 0.5.0
+CurrentVersionCode: 5

@@ -17,6 +17,8 @@ object ShizukuFileManager {
     private const val TAG = "ShizukuFileManager"
     var isBound by mutableStateOf(false)
         private set
+    
+    private var isBinding = false
 
     var connectionStatus by mutableStateOf("Disconnected")
         private set
@@ -28,6 +30,7 @@ object ShizukuFileManager {
             Log.d(TAG, "Service connected")
             userService = IUserService.Stub.asInterface(binder)
             isBound = true
+            isBinding = false
             connectionStatus = "Connected"
         }
 
@@ -35,6 +38,7 @@ object ShizukuFileManager {
             Log.d(TAG, "Service disconnected")
             userService = null
             isBound = false
+            isBinding = false
             connectionStatus = "Disconnected"
         }
     }
@@ -51,11 +55,12 @@ object ShizukuFileManager {
     }
 
     fun bindService() {
-        if (userService != null) {
-            Log.d(TAG, "Service already bound, skipping bind.")
+        if (userService != null || isBinding) {
+            Log.d(TAG, "Service already bound or binding, skipping. Bound: ${userService != null}, Binding: $isBinding")
             return
         }
 
+        isBinding = true
         connectionStatus = "Binding..."
         if (isShizukuAvailable()) {
             try {
@@ -70,9 +75,11 @@ object ShizukuFileManager {
                 Shizuku.bindUserService(userServiceArgs, connection)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to bind user service", e)
+                isBinding = false
                 connectionStatus = "Error: ${e.message}"
             }
         } else {
+            isBinding = false
             connectionStatus = "Shizuku Not Available (Ping failed)"
         }
     }
@@ -87,6 +94,7 @@ object ShizukuFileManager {
                 Shizuku.unbindUserService(userServiceArgs, connection, true)
                 userService = null
                 isBound = false
+                isBinding = false
                 connectionStatus = "Unbound"
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to unbind user service", e)
@@ -96,8 +104,14 @@ object ShizukuFileManager {
 
     fun executeCommand(command: String): Boolean {
         Log.d(TAG, "Requesting command execution: $command")
+        val service = userService
+        if (service == null) {
+            Log.w(TAG, "Cannot execute command: userService is null. isBound: $isBound, status: $connectionStatus")
+            return false
+        }
+        
         return try {
-            val result = userService?.executeCommand(command) ?: false
+            val result = service.executeCommand(command)
             Log.d(TAG, "Execution result: $result")
             result
         } catch (e: Exception) {
@@ -115,8 +129,10 @@ object ShizukuFileManager {
         val targetPath = syncFolder.path
         Log.d(TAG, "Pulling data from $syncDirPath to $targetPath")
         
-        executeCommand("mkdir -p \"$syncDirPath\"")
-        executeCommand("mkdir -p \"$targetPath\"")
+        val mkdirResult1 = executeCommand("mkdir -p \"$syncDirPath\"")
+        val mkdirResult2 = executeCommand("mkdir -p \"$targetPath\"")
+        
+        Log.d(TAG, "mkdir results: syncDir=$mkdirResult1, targetPath=$mkdirResult2")
         
         val command = "cp -rf \"$syncDirPath/.\" \"$targetPath/\""
         return executeCommand(command)
@@ -127,7 +143,8 @@ object ShizukuFileManager {
         val targetPath = syncFolder.path
         Log.d(TAG, "Pushing data from $targetPath to $syncDirPath")
         
-        executeCommand("mkdir -p \"$syncDirPath\"")
+        val mkdirResult = executeCommand("mkdir -p \"$syncDirPath\"")
+        Log.d(TAG, "mkdir result: $mkdirResult")
         
         val command = "cp -rf \"$targetPath/.\" \"$syncDirPath/\""
         return executeCommand(command)
@@ -135,8 +152,14 @@ object ShizukuFileManager {
     
     fun listFoldersAndFiles(path: String): List<String> {
         Log.d(TAG, "Listing files for: $path")
+        val service = userService
+        if (service == null) {
+            Log.w(TAG, "Cannot list files: userService is null")
+            return emptyList()
+        }
+
         return try {
-            val items = userService?.listFiles(path) ?: emptyList()
+            val items = service.listFiles(path) ?: emptyList()
             Log.d(TAG, "Found ${items.size} items")
             items
         } catch (e: Exception) {
@@ -146,11 +169,75 @@ object ShizukuFileManager {
     }
 
     fun isDirectory(path: String): Boolean {
+        val service = userService
+        if (service == null) return false
+        
         return try {
-            userService?.isDirectory(path) ?: false
+            service.isDirectory(path)
+        } catch (e: android.os.DeadObjectException) {
+            handleDeadService()
+            false
         } catch (e: Exception) {
             false
         }
+    }
+
+    fun readFile(path: String): String? {
+        val service = userService
+        if (service == null) {
+            Log.w(TAG, "Cannot read file: userService is null")
+            return null
+        }
+
+        return try {
+            service.readFile(path)
+        } catch (e: android.os.DeadObjectException) {
+            handleDeadService()
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reading file via Shizuku: $path", e)
+            null
+        }
+    }
+
+    fun writeFile(path: String, content: String): Boolean {
+        val service = userService
+        if (service == null) {
+            Log.w(TAG, "Cannot write file: userService is null")
+            return false
+        }
+
+        return try {
+            service.writeFile(path, content)
+        } catch (e: android.os.DeadObjectException) {
+            handleDeadService()
+            false
+        } catch (e: Exception) {
+            Log.e(TAG, "Error writing file via Shizuku: $path", e)
+            false
+        }
+    }
+
+    fun getLastModified(path: String): Long {
+        val service = userService
+        if (service == null) return 0L
+
+        return try {
+            service.getLastModified(path)
+        } catch (e: android.os.DeadObjectException) {
+            handleDeadService()
+            0L
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    private fun handleDeadService() {
+        Log.e(TAG, "Shizuku user service is dead. Resetting connection state.")
+        userService = null
+        isBound = false
+        isBinding = false
+        connectionStatus = "Disconnected (Service Died)"
     }
 
     fun deleteUnscopedData(syncFolder: SyncFolder): Boolean {

@@ -21,12 +21,23 @@ class MyUserService : IUserService.Stub() {
     override fun executeCommand(command: String): Boolean {
         Log.d(TAG, "Executing command: $command")
         return try {
-            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
+            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", "$command 2>&1"))
+            
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            val output = reader.readLines().joinToString("\n")
+            
             val exitCode = process.waitFor()
             Log.d(TAG, "Command exit code: $exitCode")
+            if (output.isNotEmpty()) {
+                Log.d(TAG, "Command output: $output")
+            }
+            
+            if (exitCode != 0) {
+                Log.e(TAG, "Command failed: $command | Exit: $exitCode | Output: $output")
+            }
             exitCode == 0
         } catch (e: Exception) {
-            Log.e(TAG, "Command execution failed", e)
+            Log.e(TAG, "Critical error during command execution: $command", e)
             false
         }
     }
@@ -34,13 +45,16 @@ class MyUserService : IUserService.Stub() {
     override fun listFiles(path: String): List<String> {
         val items = mutableListOf<String>()
         try {
-            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", "ls -1 \"$path\""))
+            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", "ls -1 \"$path\" 2>&1"))
             val reader = BufferedReader(InputStreamReader(process.inputStream))
             var line: String?
             while (reader.readLine().also { line = it } != null) {
                 line?.let { if (it.isNotBlank()) items.add(it) }
             }
-            process.waitFor()
+            val exitCode = process.waitFor()
+            if (exitCode != 0) {
+                Log.e(TAG, "ls -1 failed for $path with exit code $exitCode. Output: ${items.joinToString("\n")}")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Listing files failed for $path", e)
         }
@@ -50,14 +64,15 @@ class MyUserService : IUserService.Stub() {
     override fun isDirectory(path: String): Boolean {
         return try {
             val file = File(path)
-            file.exists() && file.isDirectory
-        } catch (e: Exception) {
-            try {
+            if (file.exists()) {
+                file.isDirectory
+            } else {
+                // Fallback to shell test if Java API fails or reports non-existent
                 val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", "[ -d \"$path\" ]"))
                 process.waitFor() == 0
-            } catch (e2: Exception) {
-                false
             }
+        } catch (e: Exception) {
+            false
         }
     }
 
@@ -101,6 +116,64 @@ class MyUserService : IUserService.Stub() {
         } catch (e: Exception) {
             Log.e(TAG, "Critical failure during deletion of $path", e)
             false
+        }
+    }
+
+    override fun readFile(path: String): String? {
+        Log.d(TAG, "Reading file: $path")
+        return try {
+            val file = File(path)
+            if (file.exists()) {
+                file.readText()
+            } else {
+                // Try cat via shell as fallback
+                val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", "cat \"$path\" 2>&1"))
+                val output = BufferedReader(InputStreamReader(process.inputStream)).readText()
+                val exitCode = process.waitFor()
+                if (exitCode == 0) output else null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read file: $path", e)
+            null
+        }
+    }
+
+    override fun writeFile(path: String, content: String): Boolean {
+        Log.d(TAG, "Writing file: $path (length: ${content.length})")
+        val file = File(path)
+        try {
+            val parent = file.parentFile
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs()
+            }
+            file.writeText(content)
+            Log.d(TAG, "Successfully wrote file via Java IO: $path")
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to write file via Java IO: $path. Trying shell fallback...", e)
+            return try {
+                // Shell fallback: mkdir -p first
+                val parentPath = file.parent ?: "/storage/emulated/0"
+                Runtime.getRuntime().exec(arrayOf("sh", "-c", "mkdir -p \"$parentPath\"")).waitFor()
+                
+                // Write via cat and stdin to avoid escaping nightmares
+                val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", "cat > \"$path\""))
+                process.outputStream.use { it.write(content.toByteArray()) }
+                val exitCode = process.waitFor()
+                Log.d(TAG, "Shell write exit code: $exitCode")
+                exitCode == 0
+            } catch (e2: Exception) {
+                Log.e(TAG, "Shell fallback also failed for $path", e2)
+                false
+            }
+        }
+    }
+
+    override fun getLastModified(path: String): Long {
+        return try {
+            File(path).lastModified()
+        } catch (e: Exception) {
+            0L
         }
     }
 }

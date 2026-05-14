@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
 import com.kepat.unscopemydata.data.ManifestManager
 import com.kepat.unscopemydata.data.ShizukuFileManager
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
@@ -40,17 +42,32 @@ fun MainScreen() {
     var lastModified by remember { mutableLongStateOf(ManifestManager.getManifestLastModified()) }
     var showBrowser by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var isSyncing by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
 
     // Periodically poll for manifest changes and Shizuku connectivity (every 5 seconds)
     LaunchedEffect(Unit) {
         while (true) {
-            val currentModified = ManifestManager.getManifestLastModified()
-            if (currentModified != lastModified) {
-                manifest = ManifestManager.loadManifest()
-                lastModified = currentModified
+            // Only poll if we aren't currently performing a heavy sync operation
+            if (!isSyncing && ShizukuFileManager.isBound) {
+                try {
+                    val currentModified = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        ManifestManager.getManifestLastModified()
+                    }
+                    
+                    if (currentModified != lastModified) {
+                        val updatedManifest = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            ManifestManager.loadManifest()
+                        }
+                        manifest = updatedManifest
+                        lastModified = currentModified
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("MainScreen", "Polling error", e)
+                }
             }
 
             // Also check Shizuku status and attempt to bind if disconnected
@@ -74,8 +91,14 @@ fun MainScreen() {
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showBrowser = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Folder")
+            FloatingActionButton(
+                onClick = { if (!isSyncing) showBrowser = true }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add, 
+                    contentDescription = "Add Folder",
+                    modifier = Modifier.alpha(if (isSyncing) 0.38f else 1.0f)
+                )
             }
         },
         bottomBar = {
@@ -84,37 +107,57 @@ fun MainScreen() {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    Button(onClick = {
-                        val deviceName = Build.MODEL
-                        val currentDate = dateFormat.format(Date())
-                        var allSuccess = true
-                        manifest.folders.forEach { 
-                            if (!ShizukuFileManager.pushData(it)) allSuccess = false
-                        }
-                        
-                        val updated = manifest.copy(folders = manifest.folders.map { 
-                            it.copy(mostRecentUpdator = deviceName, dateMovedFromDataToUnscoped = currentDate) 
-                        }.toMutableList())
-                        ManifestManager.saveManifest(updated)
-                        manifest = updated
-                        
-                        Toast.makeText(context, if (allSuccess) "Sync to Unscoped Successful" else "Sync to Unscoped Failed", Toast.LENGTH_SHORT).show()
-                    }) {
-                        Text("data->unscoped")
+                    Button(
+                        onClick = {
+                            isSyncing = true
+                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                val deviceName = Build.MODEL
+                                val currentDate = dateFormat.format(Date())
+                                var allSuccess = true
+                                manifest.folders.forEach { 
+                                    if (!ShizukuFileManager.pushData(it)) allSuccess = false
+                                }
+                                
+                                val updated = manifest.copy(folders = manifest.folders.map { 
+                                    it.copy(mostRecentUpdator = deviceName, dateMovedFromDataToUnscoped = currentDate) 
+                                }.toMutableList())
+                                ManifestManager.saveManifest(updated)
+                                
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    manifest = updated
+                                    isSyncing = false
+                                    Toast.makeText(context, if (allSuccess) "Sync to Unscoped Successful" else "Sync to Unscoped Failed", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        enabled = !isSyncing && ShizukuFileManager.isBound
+                    ) {
+                        if (isSyncing) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        else Text("data->unscoped")
                     }
-                    Button(onClick = {
-                        var allSuccess = true
-                        manifest.folders.forEach { 
-                            if (!ShizukuFileManager.pullData(it)) allSuccess = false
-                        }
-                        
-                        val updated = manifest.copy(folders = manifest.folders.toMutableList())
-                        ManifestManager.saveManifest(updated)
-                        manifest = updated
-                        
-                        Toast.makeText(context, if (allSuccess) "Sync to Data Successful" else "Sync to Data Failed", Toast.LENGTH_SHORT).show()
-                    }) {
-                        Text("unscoped->data")
+                    Button(
+                        onClick = {
+                            isSyncing = true
+                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                var allSuccess = true
+                                manifest.folders.forEach { 
+                                    if (!ShizukuFileManager.pullData(it)) allSuccess = false
+                                }
+                                
+                                val updated = manifest.copy(folders = manifest.folders.toMutableList())
+                                ManifestManager.saveManifest(updated)
+                                
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    manifest = updated
+                                    isSyncing = false
+                                    Toast.makeText(context, if (allSuccess) "Sync to Data Successful" else "Sync to Data Failed", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        enabled = !isSyncing && ShizukuFileManager.isBound
+                    ) {
+                        if (isSyncing) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        else Text("unscoped->data")
                     }
                 }
             }
