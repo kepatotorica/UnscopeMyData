@@ -43,7 +43,8 @@ fun MainScreen() {
     var showBrowser by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var isSyncing by remember { mutableStateOf(false) }
-    
+    var showShizukuDialog by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
@@ -72,7 +73,11 @@ fun MainScreen() {
 
             // Also check Shizuku status and attempt to bind if disconnected
             if (!ShizukuFileManager.isBound) {
-                ShizukuFileManager.bindService()
+                if (ShizukuFileManager.isShizukuAvailable()) {
+                    ShizukuFileManager.bindService()
+                } else {
+                    showShizukuDialog = true
+                }
             }
             
             delay(5000)
@@ -204,7 +209,27 @@ fun MainScreen() {
                 }
             )
         }
+
+        if (showShizukuDialog) {
+            ShizukuDialog(
+                onDismiss = { showShizukuDialog = false }
+            )
+        }
     }
+}
+
+@Composable
+fun ShizukuDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Shizuku Not Available") },
+        text = { Text("Shizuku is not running or permission is denied. Please check your Shizuku setup.") },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("OK")
+            }
+        }
+    )
 }
 
 @Composable
