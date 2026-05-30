@@ -75,8 +75,6 @@ fun MainScreen() {
             if (!ShizukuFileManager.isBound) {
                 if (ShizukuFileManager.isShizukuAvailable()) {
                     ShizukuFileManager.bindService()
-                } else {
-                    showShizukuDialog = true
                 }
             }
             

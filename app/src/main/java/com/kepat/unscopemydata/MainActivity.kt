@@ -27,6 +27,12 @@ import com.kepat.unscopemydata.data.ShizukuFileManager
 import com.kepat.unscopemydata.ui.MainScreen
 import rikka.shizuku.Shizuku
 
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
 class MainActivity : ComponentActivity() {
 
     private var showShizukuDialog by mutableStateOf(false)
@@ -57,6 +63,7 @@ class MainActivity : ComponentActivity() {
         Shizuku.addBinderReceivedListener(binderListener)
         Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
         checkShizuku()
+        startPeriodicShizukuCheck()
 
         setContent {
             MaterialTheme {
@@ -71,6 +78,27 @@ class MainActivity : ComponentActivity() {
                             onDismiss = { showShizukuDialog = false }
                         )
                     }
+                }
+            }
+        }
+    }
+
+    private fun startPeriodicShizukuCheck() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                while (true) {
+                    try {
+                        if (Shizuku.pingBinder()) {
+                            if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                                Shizuku.requestPermission(0)
+                            } else if (!ShizukuFileManager.isBound) {
+                                ShizukuFileManager.bindService()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                    delay(15000) // Check every 15 seconds
                 }
             }
         }
